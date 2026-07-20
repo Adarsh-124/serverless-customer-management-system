@@ -1,0 +1,271 @@
+import json
+import boto3
+import traceback 
+# Initialize DynamoDB
+dynamodb = boto3.resource('dynamodb')
+table = dynamodb.Table('Customer-Data')
+
+# Clean, native HTML/CSS/JS page without confusing base64 strings or bracket collision formatting
+HTML_UI = """<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customer Management System</title>
+    <style>
+        body { font-family: Arial, sans-serif; background: #f4f7fb; margin: 0; padding: 0; }
+        .container { width: 700px; margin: auto; margin-top: 40px; }
+        h1 { text-align: center; color: #1f4e79; }
+        .card { background: white; padding: 20px; margin-top: 20px; border-radius: 10px; box-shadow: 0 0 10px rgba(0,0,0,0.2); }
+        input { width: 100%; padding: 12px; margin-top: 10px; margin-bottom: 10px; border: 1px solid gray; border-radius: 5px; box-sizing: border-box; }
+        button { width: 100%; padding: 12px; background: #1f4e79; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; }
+        button:hover { background: #163d5c; }
+        #result { margin-top: 20px; font-size: 18px; }
+        #addMessage { margin-top: 15px; font-weight: bold; color: #1f4e79; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Customer Management System</h1>
+
+    <div class="card">
+        <h2>Add Customer</h2>
+        <input type="text" id="customerId" placeholder="Customer ID">
+        <input type="text" id="customerName" placeholder="Customer Name">
+        <input type="email" id="email" placeholder="Email">
+        <input type="text" id="phone" placeholder="Phone">
+        <input type="text" id="city" placeholder="City">
+        <button onclick="addCustomer()">Add Customer</button>
+        <p id="addMessage"></p>
+    </div>
+
+    <div class="card">
+        <h2>Search Customer</h2>
+        <input type="text" id="searchId" placeholder="Enter Customer ID">
+        <button onclick="searchCustomer()">Search</button>
+        <div id="result"></div>
+    </div>
+</div>
+
+<script>
+    // Points explicitly to your live API endpoint
+    const apiUrl = "https://ztzv4nrlkg.execute-api.us-east-1.amazonaws.com/production-prod/Customer";
+
+    async function addCustomer() {
+        const messageElement = document.getElementById("addMessage");
+        messageElement.style.color = "#1f4e79";
+        messageElement.innerHTML = "Saving record...";
+
+        const customer = {
+            Customer_id: document.getElementById("customerId").value.trim(),
+            CustomerName: document.getElementById("customerName").value.trim(),
+            Email: document.getElementById("email").value.trim(),
+            Phone: document.getElementById("phone").value.trim(),
+            City: document.getElementById("city").value.trim()
+        };
+
+        if (!customer.Customer_id || !customer.CustomerName) {
+            messageElement.innerHTML = "<span style='color:red;'>Customer ID and Name are required!</span>";
+            return;
+        }
+
+        try {
+            const response = await fetch(apiUrl, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(customer)
+            });
+
+            const data = await response.json();
+            
+            if (response.ok) {
+                messageElement.innerHTML = data.message || "Customer added successfully";
+                document.getElementById("customerId").value = "";
+                document.getElementById("customerName").value = "";
+                document.getElementById("email").value = "";
+                document.getElementById("phone").value = "";
+                document.getElementById("city").value = "";
+            } else {
+                messageElement.innerHTML = "<span style='color:red;'>Failed to save record.</span>";
+            }
+        } catch (error) {
+            messageElement.innerHTML = "<span style='color:red;'>Network transmission error.</span>";
+            console.error(error);
+        }
+    }
+
+    async function searchCustomer() {
+        const id = document.getElementById("searchId").value.trim();
+        const resultElement = document.getElementById("result");
+
+        if (!id) {
+            resultElement.innerHTML = "<span style='color:red;'>Please enter a search ID.</span>";
+            return;
+        }
+
+        resultElement.innerHTML = "Searching database...";
+
+        try {
+            // Bulletproof native query compilation method
+            const searchUrl = apiUrl + "?Customer_id=" + encodeURIComponent(id);
+
+            const response = await fetch(searchUrl);
+            const data = await response.json();
+
+            if (response.ok && data.Customer_id) {
+                resultElement.innerHTML =
+                    "<div style='margin-top:15px; color:#1f4e79; text-align:left; line-height:1.6;'>" +
+                    "<b>Customer ID:</b> " + data.Customer_id + "<br>" +
+                    "<b>Name:</b> " + (data.CustomerName || "N/A") + "<br>" +
+                    "<b>Email:</b> " + (data.Email || "N/A") + "<br>" +
+                    "<b>Phone:</b> " + (data.Phone || "N/A") + "<br>" +
+                    "<b>City:</b> " + (data.City || "N/A") + "</div>";
+            } else {
+                resultElement.innerHTML = "<span style='color:red;'>" + (data.message || "Customer not found.") + "</span>";
+            }
+        } catch (error) {
+            resultElement.innerHTML = "<span style='color:red;'>Error fetching search query.</span>";
+            console.error("Fetch Error:", error);
+        }
+    }
+</script>
+</body>
+</html>"""
+
+
+def lambda_handler(event, context):
+    try:
+        http_method = str(event.get("httpMethod", "")).upper()
+
+        # ==================================
+        # POST - Add Customer Record
+        #  ==================================
+        if http_method == "POST":
+        
+            # Safely parse the JSON body
+            body = json.loads(event.get("body", "{}"))
+
+            # Use .get() to prevent any KeyError crashes
+            cust_id = body.get("Customer_id") or body.get("customer_id") or ""
+            cust_name = body.get("CustomerName") or body.get("customerName") or ""
+
+            # Stop the code if required fields are missing
+            if not cust_id or not cust_name:
+                return {
+                    "statusCode": 400,
+                    "headers": {
+                        "Content-Type": "application/json",
+                        "Access-Control-Allow-Origin": "*",
+                        "Access-Control-Allow-Headers": "Content-Type",
+                        "Access-Control-Allow-Methods": "GET,POST,OPTIONS"
+                    },
+                    "body": json.dumps({"message": "Missing Customer_id or CustomerName"})
+                }
+
+            # Map fields safely into your DynamoDB dictionary layout
+            customer = {
+                "Customer_id": str(cust_id).strip(),
+                "CustomerName": str(cust_name).strip(),
+                "Email": str(body.get("Email") or body.get("email") or "").strip(),
+                "Phone": str(body.get("Phone") or body.get("phone") or "").strip(),
+                "City": str(body.get("City") or body.get("city") or "").strip()
+            }
+
+            # Write cleanly to DynamoDB
+            table.put_item(Item=customer)
+
+            return {
+                "statusCode": 200,
+                "headers": {
+                    "Content-Type": "application/json",
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Headers": "Content-Type",
+                    "Access-Control-Allow-Methods": "GET,POST,OPTIONS"
+                },
+                "body": json.dumps({"message": "Customer added successfully"})
+            }
+        # ==================================
+        # GET - Handles Web Page AND Search Queries
+        # ==================================
+        elif http_method == "GET":
+            params = event.get("queryStringParameters") or {}
+
+            # If no tracking variable parameter exists, instantly serve the frontend layout page!
+            if "Customer_id" not in params:
+                return {
+                    "statusCode": 200,
+                    "headers": {
+                        "Content-Type": "text/html",
+                        "Access-Control-Allow-Origin": "*",
+                        "Access-Control-Allow-Headers": "Content-Type",
+                        "Access-Control-Allow-Methods": "GET,POST,OPTIONS"
+                    },
+                    "body": str(HTML_UI)
+                }
+
+            # If tracking variable parameters exist, safely extract data row elements from NoSQL mapping
+            customer_id = params["Customer_id"]
+            response = table.get_item(Key={"Customer_id": customer_id})
+
+            if "Item" in response:
+                return {
+                    "statusCode": 200,
+                    "headers": {
+                        "Content-Type": "application/json",
+                        "Access-Control-Allow-Origin": "*",
+                        "Access-Control-Allow-Headers": "Content-Type",
+                        "Access-Control-Allow-Methods": "GET,POST,OPTIONS"
+                    },
+                    "body": json.dumps(response["Item"])
+                }
+            else:
+                return {
+                    "statusCode": 404,
+                    "headers": {
+                        "Content-Type": "application/json",
+                        "Access-Control-Allow-Origin": "*",
+                        "Access-Control-Allow-Headers": "Content-Type",
+                        "Access-Control-Allow-Methods": "GET,POST,OPTIONS"
+                    },
+                    "body": json.dumps({"message": "Customer not found"})
+                }
+
+        # ==================================
+        # OPTIONS - CORS preflight
+        # ==================================
+        elif http_method == "OPTIONS":
+            return {
+                "statusCode": 200,
+                "headers": {
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Headers": "Content-Type",
+                    "Access-Control-Allow-Methods": "GET,POST,OPTIONS"
+                },
+                "body": ""
+            }
+
+        else:
+            return {
+                "statusCode": 405,
+                "headers": {
+                    "Content-Type": "application/json",
+                    "Access-Control-Allow-Origin": "*",
+                    "Access-Control-Allow-Headers": "Content-Type",
+                    "Access-Control-Allow-Methods": "GET,POST,OPTIONS"
+                },
+                "body": json.dumps({"message": "Method Not Allowed"})
+            }
+
+    except Exception as e:
+        print(traceback.format_exc())
+        return {
+            "statusCode": 500,
+            "headers": {
+                "Content-Type": "application/json",
+                "Access-Control-Allow-Origin": "*",
+                "Access-Control-Allow-Headers": "Content-Type",
+                "Access-Control-Allow-Methods": "GET,POST,OPTIONS"
+            },
+            "body": json.dumps({"message": f"Server Error: {str(e)}"})
+        } # <--- Closes the body/return dictionary
