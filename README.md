@@ -9,6 +9,8 @@ This project demonstrates the development of a cloud-based customer management a
 The application uses AWS Lambda for backend processing, API Gateway for REST API communication, and DynamoDB for storing customer data.
 
 ## Architecture
+![AWS Architecture Diagram]
+(architecture-diagram.jpeg)
 
 Frontend (HTML, CSS, JavaScript)
         ↓
